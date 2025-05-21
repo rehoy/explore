@@ -52,11 +52,11 @@ func (c *Context) InitCircles(numCircles int) {
 		Y: float32(rand.Intn(2)+1) * float32(1-2*rand.Intn(2)),
 	}
 
-		c.addCircle(x, y, radius, velocity)
+		c.AddCircle(x, y, radius, velocity)
 	}
 }
 
-func (c *Context) addCircle(x, y uint16, radius float32, v Velocity) {
+func (c *Context) AddCircle(x, y uint16, radius float32, v Velocity) {
 	r := uint8(rand.Intn(256))
 	g := uint8(rand.Intn(256))
 	b := uint8(rand.Intn(256))
@@ -117,9 +117,8 @@ func (c *Context) ExportState() []byte {
 	return state
 }
 
-func (c *Context) ImportState(state []byte) {
-	c.Circles = make([]Circle, 0)
-	c.Velocities = make([]Velocity, 0)
+func ImportState(state []byte) []Circle {
+	circles := make([]Circle, 0, len(state)/13)
 
 	for i := 0; i < len(state); i += 13 {
 		if i+13 > len(state) {
@@ -135,14 +134,11 @@ func (c *Context) ImportState(state []byte) {
 			b:      state[i+11],
 			a:      state[i+12],
 		}
-		c.Circles = append(c.Circles, circle)
+		circles = append(circles, circle)
 
-		velocity := Velocity{
-			X: 0,
-			Y: 0,
-		}
-		c.Velocities = append(c.Velocities, velocity)
 	}
+
+	return circles
 }
 func uint32FromFloat32(f float32) uint32 {
 	bits := *(*uint32)(unsafe.Pointer(&f))

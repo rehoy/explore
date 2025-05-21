@@ -2,6 +2,7 @@ package main
 
 import (
 	"time"
+	"fmt"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"github.com/rehoy/explore/balls"
@@ -15,31 +16,34 @@ func main() {
     rl.InitWindow(context.Width, context.Height, "Hello, raylib-go")
     defer rl.CloseWindow()
 
-	stateCh := make(chan []balls.Circle, 1)
+	stateCh := make(chan []byte, 1)
 	go func () {
 		ticker := time.NewTicker(time.Second / 60)
 		defer ticker.Stop()
 		for range ticker.C {
-			circles := context.UpdateCircles()
+			_ = context.UpdateCircles()
+			state := context.ExportState()
+
 			select {
-			case stateCh <- circles:
+			case stateCh <- state:
 			default:
+				fmt.Println("Missed a frame")
 			}
 		}
 		
 	}()
 	
-	var circles []balls.Circle
+	var state []byte
 
     for !rl.WindowShouldClose() {
 		select {
-		case circles = <-stateCh:
+		case state = <-stateCh:
 		default:
 		}
         rl.BeginDrawing()
         rl.ClearBackground(rl.RayWhite)
 
-		
+		circles := balls.ImportState(state)
 		for _, circle := range circles {
 			r, g, b, a := circle.GetColor()
 			rl.DrawCircle(int32(circle.X), int32(circle.Y), circle.Radius, rl.NewColor(r, g, b, a))
