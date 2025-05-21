@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -9,6 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rehoy/explore/balls"
 )
+
+type MousePos struct {
+	X float32 `json:"x"`
+	Y float32 `json:"y"`
+}
 
 func main() {
 	// Connect to the websocket server
@@ -44,6 +50,23 @@ func main() {
 	}()
 
 	for !rl.WindowShouldClose() {
+		// if rl.IsKeyPressed(rl.KeySpace) {
+		// 	// Send a message to the server to add a new circle
+			
+		// 	mousePos := MousePos{
+		// 		X: float32(rl.GetMouseX()),
+		// 		Y: float32(rl.GetMouseY()),
+		// 	}
+			
+		// 	fmt.Println("Adding a new circle at:", mousePos.X, mousePos.Y)
+		// 	err := conn.WriteJSON(mousePos)
+		// 	if err != nil {
+		// 		log.Println("Write error:", err)
+		// 		closeCh <- struct{}{}
+		// 		return
+		// 	}
+		// }
+
 		select {
 		case state = <-stateCh:
 		case <-closeCh:

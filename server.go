@@ -6,10 +6,16 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
+	"encoding/json"
 
 	"github.com/gorilla/websocket"
 	"github.com/rehoy/explore/balls"
 )
+
+type MousePos struct {
+	X float32 `json:"x"`
+	Y float32 `json:"y"`
+}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
