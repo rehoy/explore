@@ -32,6 +32,7 @@ func main() {
 	var state []byte
 	stateCh := make(chan []byte, 1)
 	closeCh := make(chan struct{})
+	spaceCh := make(chan struct{}, 1)
 
 	// Goroutine to receive state from server
 	go func() {
@@ -49,29 +50,32 @@ func main() {
 		}
 	}()
 
+	go isPressed(spaceCh)
+
 	for !rl.WindowShouldClose() {
-		// if rl.IsKeyPressed(rl.KeySpace) {
-		// 	// Send a message to the server to add a new circle
-			
-		// 	mousePos := MousePos{
-		// 		X: float32(rl.GetMouseX()),
-		// 		Y: float32(rl.GetMouseY()),
-		// 	}
-			
-		// 	fmt.Println("Adding a new circle at:", mousePos.X, mousePos.Y)
-		// 	err := conn.WriteJSON(mousePos)
-		// 	if err != nil {
-		// 		log.Println("Write error:", err)
-		// 		closeCh <- struct{}{}
-		// 		return
-		// 	}
-		// }
+		select {
+		case <-spaceCh:
+			mousePos := MousePos{
+				X: float32(rl.GetMouseX()),
+				Y: float32(rl.GetMouseY()),
+			}
+			fmt.Println("Adding a new circle at:", mousePos.X, mousePos.Y)
+			err := conn.WriteJSON(mousePos)
+			if err != nil {
+				log.Println("Write error:", err)
+				closeCh <- struct{}{}
+				return
+			}
+		default:
+			// no key press
+		}
 
 		select {
 		case state = <-stateCh:
 		case <-closeCh:
 			os.Exit(0)
 		default:
+			// no new state
 		}
 
 		rl.BeginDrawing()
@@ -91,4 +95,17 @@ func main() {
 
 	// Optionally, send a message to close the simulation on exit
 	// _ = conn.WriteMessage(websocket.TextMessage, []byte("close"))
+}
+
+func isPressed(spaceCh chan struct{}) {
+
+	for {
+		if rl.IsKeyPressed(rl.KeySpace) {
+			select {
+			case spaceCh <- struct{}{}:
+			default:
+			}
+		}
+		time.Sleep(time.Millisecond * 2)
+	}
 }

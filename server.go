@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
 	"time"
-	"encoding/json"
 
 	"github.com/gorilla/websocket"
 	"github.com/rehoy/explore/balls"
@@ -35,19 +35,22 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
 
+	addCircleCh := make(chan MousePos, 8)
 	closeCh := make(chan struct{})
 
-	// Listen for any message from client to close simulation
+	// Listen for messages from client to add circles
 	go func() {
 		for {
-			_, _, err := conn.ReadMessage()
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				closeCh <- struct{}{}
 				return
 			}
-			// On any message, signal to close
-			closeCh <- struct{}{}
-			return
+			var mouse MousePos
+			if err := json.Unmarshal(msg, &mouse); err == nil {
+				addCircleCh <- mouse
+			}
+			// Ignore messages that can't be parsed as MousePos
 		}
 	}()
 
@@ -57,17 +60,39 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			count++
 			if count%600 == 0 {
-				radius := float32(rand.Intn(50) + 10)
+				var radius float32 = 15.0
 				x := uint16(rand.Intn(int(800)-int(2*radius)) + int(radius))
 				y := uint16(rand.Intn(int(600)-int(2*radius)) + int(radius))
 
 				velocity := balls.Velocity{
-				X: 0.0,
-				Y: 0.0,
+					X: 0.0,
+					Y: 0.0,
 				}
 
 				context.AddCircle(x, y, radius, velocity)
 				fmt.Println("Added circle:", x, y)
+			}
+			// Add circles from client mouse positions
+			select {
+			case mouse := <-addCircleCh:
+				radius := float32(rand.Intn(30) + 10)
+				x := uint16(mouse.X)
+				y := uint16(mouse.Y)
+				var vx, vy float32
+				for vx == 0 {
+					vx = float32(rand.Float64()*4 - 2)
+				}
+				for vy == 0 {
+					vy = float32(rand.Float64()*4 - 2)
+				}
+				velocity := balls.Velocity{
+					X: vx,
+					Y: vy,
+				}
+				context.AddCircle(x, y, radius, velocity)
+				fmt.Println("Added circle from client:", x, y)
+			default:	
+				// no mouse event
 			}
 			_ = context.UpdateCircles()
 			state := context.ExportState()
