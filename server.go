@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rehoy/explore/balls"
+	"github.com/rehoy/explore/logger"
 )
 
 type MousePos struct {
@@ -22,24 +23,26 @@ var upgrader = websocket.Upgrader{
 }
 
 type Server struct {
-	rooms map[string]*balls.Context
+	rooms  map[string]*balls.Context
+	Logger *logger.Logger
 }
 
 func NewServer() *Server {
 	return &Server{
 		rooms: make(map[string]*balls.Context),
+		Logger: logger.NewLogger("server.log"),
 	}
 }
 
 func (s *Server) startRoomSimulation(room string, ctx *balls.Context) {
-    go func() {
-        ticker := time.NewTicker(time.Second / 60)
-        defer ticker.Stop()
-        for {
-            <-ticker.C
-            ctx.UpdateCircles()
-        }
-    }()
+	go func() {
+		ticker := time.NewTicker(time.Second / 60)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			ctx.UpdateCircles()
+		}
+	}()
 }
 
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -108,10 +111,11 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 					Y: vy,
 				}
 				context.AddCircle(x, y, radius, velocity)
-				fmt.Println("Added circle from client on room:", room, "-", x, y)
+				s.Logger.Log(1, fmt.Sprintf("Added circle at (%f, %f) with radius %f", mouse.X, mouse.Y, radius))
 			default:
 				// no mouse event
 			}
+			
 			state := context.ExportState()
 			err := conn.WriteMessage(websocket.BinaryMessage, state)
 			if err != nil {
@@ -128,8 +132,8 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startTestServer() {
 
 	rooms := []struct {
-		name        string
-		numCircles  int
+		name       string
+		numCircles int
 	}{
 		{"one", 10},
 		{"two", 5},
@@ -142,13 +146,15 @@ func (s *Server) startTestServer() {
 			ctx.InitCircles(room.numCircles)
 			s.rooms[room.name] = &ctx
 			s.startRoomSimulation(room.name, &ctx)
-			log.Println("Starting simulation for room:", room.name)
+			s.Logger.Log(0, "Starting simulation for room:", room.name)
 		}
 	}
 }
 
 func main() {
+
 	s := NewServer()
+	go s.Logger.StartLogger()
 	s.startTestServer()
 	http.HandleFunc("/ws", s.wsHandler)
 	log.Println("Server started on :8080")
