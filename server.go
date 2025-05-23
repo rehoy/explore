@@ -18,19 +18,25 @@ type MousePos struct {
 	Y float32 `json:"y"`
 }
 
+type User struct {
+	Name string `json:"name"`
+} 
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 type Server struct {
-	rooms  map[string]*balls.Context
-	Logger *logger.Logger
+	rooms     map[string]*balls.Context
+	Logger    *logger.Logger
+	connRooms map[*websocket.Conn]string // track which room each connection is in
 }
 
 func NewServer() *Server {
 	return &Server{
-		rooms: make(map[string]*balls.Context),
-		Logger: logger.NewLogger("server.log"),
+		rooms:     make(map[string]*balls.Context),
+		Logger:    logger.NewLogger("server.log"),
+		connRooms: make(map[*websocket.Conn]string), // initialize map
 	}
 }
 
@@ -58,6 +64,10 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	if room == "" {
 		room = "default"
 	}
+
+	// Track connection to room
+	s.connRooms[conn] = room
+	defer delete(s.connRooms, conn)
 
 	// Get or create context for this room
 	context, ok := s.rooms[room]
@@ -115,7 +125,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 			default:
 				// no mouse event
 			}
-			
+
 			state := context.ExportState()
 			err := conn.WriteMessage(websocket.BinaryMessage, state)
 			if err != nil {
