@@ -49,7 +49,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	context, ok := s.rooms[room]
 	if !ok {
 		ctx := balls.MakeContext(800, 600)
-		ctx.InitCircles(10)
+		ctx.InitCircles(0) // Initialize with 10 circles
 		context = &ctx
 		s.rooms[room] = context
 	}

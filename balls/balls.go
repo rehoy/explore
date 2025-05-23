@@ -10,11 +10,13 @@ type Velocity struct {
 	Y float32
 }
 type Circle struct {
-	uid    uint8
-	X      uint16
-	Y      uint16
-	Radius float32
-	r ,g, b, a uint8
+	uid        uint8
+	Xf         float32 // true X position (for movement)
+	Yf         float32 // true Y position (for movement)
+	X          uint16  // integer X for export/drawing
+	Y          uint16  // integer Y for export/drawing
+	Radius     float32
+	r, g, b, a uint8
 }
 
 func (c *Circle) GetColor() (uint8, uint8, uint8, uint8) {
@@ -48,9 +50,9 @@ func (c *Context) InitCircles(numCircles int) {
 		y := uint16(rand.Intn(int(c.Height)-int(2*radius)) + int(radius))
 
 		velocity := Velocity{
-		X: float32(rand.Intn(2)+1) * float32(1-2*rand.Intn(2)), // random value between -5 and 5, excluding 0
-		Y: float32(rand.Intn(2)+1) * float32(1-2*rand.Intn(2)),
-	}
+			X: float32(rand.Intn(2)+1) * float32(1-2*rand.Intn(2)), // random value between -5 and 5, excluding 0
+			Y: float32(rand.Intn(2)+1) * float32(1-2*rand.Intn(2)),
+		}
 
 		c.AddCircle(x, y, radius, velocity)
 	}
@@ -63,6 +65,8 @@ func (c *Context) AddCircle(x, y uint16, radius float32, v Velocity) {
 	a := uint8(255)
 
 	circle := Circle{
+		Xf:     float32(x),
+		Yf:     float32(y),
 		X:      x,
 		Y:      y,
 		Radius: radius,
@@ -72,27 +76,29 @@ func (c *Context) AddCircle(x, y uint16, radius float32, v Velocity) {
 		a:      a,
 	}
 	c.Circles = append(c.Circles, circle)
-
 	c.Velocities = append(c.Velocities, v)
 }
 
-func (c *Context) UpdateCircles() []Circle{
+func (c *Context) UpdateCircles() []Circle {
 	for i := 0; i < len(c.Circles); i++ {
 		circle := &c.Circles[i]
 		velocity := &c.Velocities[i]
 
-		circle.X += uint16(velocity.X)
-		circle.Y += uint16(velocity.Y)
+		circle.Xf += velocity.X
+		circle.Yf += velocity.Y
 
-		if float32(circle.X)-circle.Radius < 0 || float32(circle.X)+circle.Radius > float32(c.Width) {
+		// Bounce logic
+		if circle.Xf-circle.Radius < 0 || circle.Xf+circle.Radius > float32(c.Width) {
 			velocity.X = -velocity.X
 		}
-		if float32(circle.Y)-circle.Radius < 0 || float32(circle.Y)+circle.Radius > float32(c.Height) {
+		if circle.Yf-circle.Radius < 0 || circle.Yf+circle.Radius > float32(c.Height) {
 			velocity.Y = -velocity.Y
 		}
 
+		// Update integer positions for export/drawing
+		circle.X = uint16(circle.Xf)
+		circle.Y = uint16(circle.Yf)
 	}
-
 	return c.Circles
 }
 
@@ -152,4 +158,3 @@ func float32FromBytes(b []byte) float32 {
 	bits := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
 	return *(*float32)(unsafe.Pointer(&bits))
 }
-
