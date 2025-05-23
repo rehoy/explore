@@ -31,6 +31,17 @@ func NewServer() *Server {
 	}
 }
 
+func (s *Server) startRoomSimulation(room string, ctx *balls.Context) {
+    go func() {
+        ticker := time.NewTicker(time.Second / 60)
+        defer ticker.Stop()
+        for {
+            <-ticker.C
+            ctx.UpdateCircles()
+        }
+    }()
+}
+
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -97,11 +108,10 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 					Y: vy,
 				}
 				context.AddCircle(x, y, radius, velocity)
-				fmt.Println("Added circle from client:", x, y, velocity)
+				fmt.Println("Added circle from client on room:", room, "-", x, y)
 			default:
 				// no mouse event
 			}
-			_ = context.UpdateCircles()
 			state := context.ExportState()
 			err := conn.WriteMessage(websocket.BinaryMessage, state)
 			if err != nil {
@@ -115,8 +125,31 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) startTestServer() {
+
+	rooms := []struct {
+		name        string
+		numCircles  int
+	}{
+		{"one", 10},
+		{"two", 5},
+		{"three", 20},
+	}
+
+	for _, room := range rooms {
+		if _, ok := s.rooms[room.name]; !ok {
+			ctx := balls.MakeContext(800, 600)
+			ctx.InitCircles(room.numCircles)
+			s.rooms[room.name] = &ctx
+			s.startRoomSimulation(room.name, &ctx)
+			log.Println("Starting simulation for room:", room.name)
+		}
+	}
+}
+
 func main() {
 	s := NewServer()
+	s.startTestServer()
 	http.HandleFunc("/ws", s.wsHandler)
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
