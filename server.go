@@ -21,7 +21,17 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+type Server struct {
+	rooms map[string]*balls.Context
+}
+
+func NewServer() *Server {
+	return &Server{
+		rooms: make(map[string]*balls.Context),
+	}
+}
+
+func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
@@ -29,8 +39,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	context := balls.MakeContext(800, 600)
-	context.InitCircles(10)
+	// Get room from query, default to "default"
+	room := r.URL.Query().Get("room")
+	if room == "" {
+		room = "default"
+	}
+
+	// Get or create context for this room
+	context, ok := s.rooms[room]
+	if !ok {
+		ctx := balls.MakeContext(800, 600)
+		ctx.InitCircles(10)
+		context = &ctx
+		s.rooms[room] = context
+	}
 
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
@@ -54,24 +76,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	count := 0
 	for {
 		select {
 		case <-ticker.C:
-			count++
-			if count%600 == 0 {
-				var radius float32 = 15.0
-				x := uint16(rand.Intn(int(800)-int(2*radius)) + int(radius))
-				y := uint16(rand.Intn(int(600)-int(2*radius)) + int(radius))
-
-				velocity := balls.Velocity{
-					X: 0.0,
-					Y: 0.0,
-				}
-
-				context.AddCircle(x, y, radius, velocity)
-				fmt.Println("Added circle:", x, y)
-			}
 			// Add circles from client mouse positions
 			select {
 			case mouse := <-addCircleCh:
@@ -90,8 +97,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 					Y: vy,
 				}
 				context.AddCircle(x, y, radius, velocity)
-				fmt.Println("Added circle from client:", x, y)
-			default:	
+				fmt.Println("Added circle from client:", x, y, velocity)
+			default:
 				// no mouse event
 			}
 			_ = context.UpdateCircles()
@@ -109,7 +116,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/ws", wsHandler)
+	s := NewServer()
+	http.HandleFunc("/ws", s.wsHandler)
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

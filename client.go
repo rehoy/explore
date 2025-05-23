@@ -98,14 +98,17 @@ func main() {
 }
 
 func isPressed(spaceCh chan struct{}) {
-
-	for {
-		if rl.IsKeyPressed(rl.KeySpace) {
-			select {
-			case spaceCh <- struct{}{}:
-			default:
-			}
-		}
-		time.Sleep(time.Millisecond * 2)
-	}
+    for {
+        if rl.IsKeyPressed(rl.KeySpace) {
+            select {
+            case spaceCh <- struct{}{}:
+            default:
+            }
+            // Wait until key is released to avoid multiple triggers
+            for rl.IsKeyDown(rl.KeySpace) {
+                time.Sleep(time.Millisecond * 5)
+            }
+        }
+        time.Sleep(time.Millisecond * 2)
+    }
 }
