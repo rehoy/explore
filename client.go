@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,11 @@ import (
 type MousePos struct {
 	X float32 `json:"x"`
 	Y float32 `json:"y"`
+}
+
+type Event struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 func main() {
@@ -63,7 +69,14 @@ func main() {
 				Y: float32(rl.GetMouseY()),
 			}
 			fmt.Println("Adding a new circle at:", mousePos.X, mousePos.Y)
-			err := conn.WriteJSON(mousePos)
+			event := Event{Type: "add_circle"}
+			payloadBytes, err := json.Marshal(mousePos)
+			if err != nil {
+				log.Println("Could not marshal mouse pos", mousePos)
+			}
+			event.Payload = payloadBytes
+
+			err = conn.WriteJSON(event)
 			if err != nil {
 				log.Println("Write error:", err)
 				closeCh <- struct{}{}
@@ -101,17 +114,17 @@ func main() {
 }
 
 func isPressed(spaceCh chan struct{}) {
-    for {
-        if rl.IsKeyPressed(rl.KeySpace) {
-            select {
-            case spaceCh <- struct{}{}:
-            default:
-            }
-            // Wait until key is released to avoid multiple triggers
-            for rl.IsKeyDown(rl.KeySpace) {
-                time.Sleep(time.Millisecond * 5)
-            }
-        }
-        time.Sleep(time.Millisecond * 2)
-    }
+	for {
+		if rl.IsKeyPressed(rl.KeySpace) {
+			select {
+			case spaceCh <- struct{}{}:
+			default:
+			}
+			// Wait until key is released to avoid multiple triggers
+			for rl.IsKeyDown(rl.KeySpace) {
+				time.Sleep(time.Millisecond * 5)
+			}
+		}
+		time.Sleep(time.Millisecond * 2)
+	}
 }

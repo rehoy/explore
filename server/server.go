@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -13,10 +12,21 @@ import (
 	"github.com/rehoy/explore/logger"
 )
 
+type Event struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 type MousePos struct {
 	X float32 `json:"x"`
 	Y float32 `json:"y"`
 }
+
+type SetUsernamePayload struct {
+	Name string `json:"name"`
+}
+
+type AddCirclePayload MousePos
 
 type User struct {
 	Name string `json:"name"`
@@ -40,6 +50,22 @@ func NewServer() *Server {
 	}
 }
 
+func (s *Server) sendEvent(conn *websocket.Conn, eventType string, payload interface{}) error {
+	event := Event{
+		Type: eventType,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		s.Logger.Log("could not marshal", eventType)
+		return err
+	}
+
+	event.Payload = payloadBytes
+
+	return conn.WriteJSON(event)
+}
+
 func (s *Server) startRoomSimulation(room string, ctx *balls.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Second / 60)
@@ -49,6 +75,50 @@ func (s *Server) startRoomSimulation(room string, ctx *balls.Context) {
 			ctx.UpdateCircles()
 		}
 	}()
+}
+
+func (s *Server) handleEvent(event Event, context *balls.Context, conn *websocket.Conn) {
+
+	switch event.Type {
+	case "add_circle":
+		s.Logger.Log("added circle")
+		var p AddCirclePayload
+
+		if err := json.Unmarshal(event.Payload, &p); err != nil {
+			s.Logger.Log("Could not unmarshal payload")
+		}
+
+		radius := float32(rand.Intn(30) + 10)
+		x := uint16(p.X)
+		y := uint16(p.Y)
+		var vx, vy float32
+		for vx == 0 {
+			vx = float32(rand.Float64()*4 - 2)
+		}
+		for vy == 0 {
+			vy = float32(rand.Float64()*4 - 2)
+		}
+		velocity := balls.Velocity{
+			X: vx,
+			Y: vy,
+		}
+		context.AddCircle(x, y, radius, velocity)
+
+	case "set_userName":
+		s.Logger.Log("Set username")
+		var p SetUsernamePayload
+		if err := json.Unmarshal(event.Payload, &p); err != nil {
+			log.Printf("Error unmarshaling set_username payload: %v", err)
+			return
+		}
+		// Here you would associate the name `p.Name` with the connection.
+		// For now, we'll just log it.
+		log.Printf("User set name to: %s", p.Name)
+		// You could send a confirmation back to the client
+		s.sendEvent(conn, "username_accepted", p)
+	default:
+		s.Logger.Log("Event type", event, "not recognized")
+	}
 }
 
 func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
@@ -78,65 +148,38 @@ func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 		s.rooms[room] = context
 	}
 
-	ticker := time.NewTicker(time.Second / 60)
-	defer ticker.Stop()
-
-	addCircleCh := make(chan MousePos, 8)
-	closeCh := make(chan struct{})
-
-	// Listen for messages from client to add circles
 	go func() {
+		defer func() {}()
 		for {
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				closeCh <- struct{}{}
-				return
+			var event Event
+			if err := conn.ReadJSON(&event); err != nil {
+				s.Logger.Log("Error reading event", err)
+				break
 			}
-			var mouse MousePos
-			if err := json.Unmarshal(msg, &mouse); err == nil {
-				addCircleCh <- mouse
-			}
-			// Ignore messages that can't be parsed as MousePos
+			s.handleEvent(event, context, conn)
 		}
 	}()
+
+	ticker := time.NewTicker(time.Second / 60)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			// Add circles from client mouse positions
-			select {
-			case mouse := <-addCircleCh:
-				radius := float32(rand.Intn(30) + 10)
-				x := uint16(mouse.X)
-				y := uint16(mouse.Y)
-				var vx, vy float32
-				for vx == 0 {
-					vx = float32(rand.Float64()*4 - 2)
-				}
-				for vy == 0 {
-					vy = float32(rand.Float64()*4 - 2)
-				}
-				velocity := balls.Velocity{
-					X: vx,
-					Y: vy,
-				}
-				context.AddCircle(x, y, radius, velocity)
-				s.Logger.Log(1, fmt.Sprintf("Added circle at (%f, %f) with radius %f", mouse.X, mouse.Y, radius))
-			default:
-				// no mouse event
-			}
-
+			// We now send the binary state as a specific event type
 			state := context.ExportState()
+			// To send binary, we can't use the JSON envelope.
+			// It's often best to keep state updates separate.
 			err := conn.WriteMessage(websocket.BinaryMessage, state)
 			if err != nil {
 				log.Println("Write error:", err)
-				return
+				return // Exit on write error
 			}
-		case <-closeCh:
-			log.Println("Received close signal from client")
-			return
+			// Add a channel here to listen for the read goroutine's exit
+			// to properly close the connection.
 		}
 	}
+
 }
 
 func (s *Server) StartTestServer() {

@@ -46,7 +46,7 @@ func (l *Logger) StartLogger() {
 				defer file.Close()
 
 				for _, line := range l.LogLines {
-					if _, err := file.WriteString(line + "\n"); err != nil {
+					if _, err := file.WriteString(line); err != nil {
 						fmt.Println("Error writing to log file:", err)
 					}
 				}
