@@ -1,4 +1,4 @@
-package server
+package game
 
 import (
 	"encoding/json"
@@ -11,6 +11,22 @@ import (
 	"github.com/rehoy/explore/balls" // Your existing balls package
 	"sync"
 )
+
+type Event struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type MousePos struct {
+	X float32 `json:"x"`
+	Y float32 `json:"y"`
+}
+
+type SetUsernamePayload struct {
+	Name string `json:"name"`
+}
+
+type AddCirclePayload MousePos
 
 // BallsGameWrapper implements the Game interface for the balls simulation.
 type BallsGameWrapper struct {

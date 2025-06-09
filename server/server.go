@@ -6,11 +6,13 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rehoy/explore/balls"
+	"github.com/rehoy/explore/game"
 	"github.com/rehoy/explore/logger"
 )
 
@@ -132,21 +134,24 @@ func (s *Server) GetorCreateRoom(roomID, gametype string) (*Room, error) {
 		return room, nil
 	}
 
-	var game Game
+	var gameInstance game.Game
 
 	switch gametype {
 	case "balls":
 		ctx := balls.MakeContext(800, 600)
-		game = NewBallsGameWrapper(roomID, &ctx)
+		gameInstance = game.NewBallsGameWrapper(roomID, &ctx)
 	case "colors":
 		s.Logger.Log("Not implemented colors yet")
 		return nil, fmt.Errorf("Not implemeted yet")
+	case "duel":
+		s.Logger.Log("starting duel game")
+		gameInstance = game.NewDuelGame(roomID)
 	default:
 		s.Logger.Log("not a recognized gametype", gametype)
 		return nil, fmt.Errorf("Not recognized", gametype)
 	}
 
-	room = NewRoom(roomID, game)
+	room = NewRoom(roomID, gameInstance)
 
 	s.rooms[roomID] = room
 	go room.Run()
@@ -218,4 +223,78 @@ func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+}
+
+func (s *Server) PrintRoomInfo() {
+	s.roomsMu.Lock() // Lock to prevent map modification while iterating
+	defer s.roomsMu.Unlock()
+
+	const headerSep = "═"
+	const lineSep = "─"
+	const padding = 2
+	const colWidthRoom = 20
+	const colWidthType = 15
+	const colWidthClients = 10
+	const colWidthStatus = 10
+
+	// Calculate total width
+	totalWidth := colWidthRoom + colWidthType + colWidthClients + colWidthStatus + (padding * 7) + 3 // +3 for separators and border
+
+	fmt.Println("\n" + strings.Repeat("═", totalWidth))
+	fmt.Printf("║%s %s ACTIVE GAME ROOMS %s %s║\n",
+		strings.Repeat(" ", (totalWidth-25)/2),
+		"✨", // Fun emoji
+		"🎮", // Another fun emoji
+		strings.Repeat(" ", (totalWidth-25)/2))
+	fmt.Println(strings.Repeat("═", totalWidth))
+
+	// Print table header
+	fmt.Printf("║%s %-*s │ %-*s │ %-*s │ %-*s %s║\n",
+		strings.Repeat(" ", padding),
+		colWidthRoom, "ROOM ID",
+		colWidthType, "GAME TYPE",
+		colWidthClients, "CLIENTS",
+		colWidthStatus, "STATUS",
+		strings.Repeat(" ", padding))
+	fmt.Printf("╠%s═╧%s═╪%s═╪%s═╪%s═%s╣\n",
+		strings.Repeat(headerSep, padding),
+		strings.Repeat(headerSep, colWidthRoom+1), // +1 for extra space
+		strings.Repeat(headerSep, colWidthType+1),
+		strings.Repeat(headerSep, colWidthClients+1),
+		strings.Repeat(headerSep, colWidthStatus+1),
+		strings.Repeat(headerSep, padding))
+
+	if len(s.rooms) == 0 {
+		fmt.Printf("║%s No active rooms found. %s║\n",
+			strings.Repeat(" ", (totalWidth-25)/2),
+			strings.Repeat(" ", (totalWidth-25)/2))
+		fmt.Println(strings.Repeat("═", totalWidth))
+		return
+	}
+
+	// Iterate and print room details
+	for roomID, room := range s.rooms {
+		gameType := "Unknown"
+		isRunning := "Stopped"
+		clientCount := room.GetClientCount() // Assuming room.GetClientCount() exists
+
+		if room.Game != nil {
+			gameType = strings.TrimPrefix(fmt.Sprintf("%T", room.Game), "*game.") // Get concrete type
+			isRunning = "Running"
+			if !room.Game.IsRunning() {
+				isRunning = "Stopped"
+			}
+		}
+
+		fmt.Printf("║%s %-*s │ %-*s │ %-*d │ %-*s %s║\n",
+			strings.Repeat(" ", padding),
+			colWidthRoom, roomID,
+			colWidthType, gameType,
+			colWidthClients, clientCount,
+			colWidthStatus, isRunning,
+			strings.Repeat(" ", padding))
+	}
+
+	fmt.Println(strings.Repeat("═", totalWidth))
+	fmt.Println()
 }

@@ -460,3 +460,27 @@ Logger started, 2025-06-08T17:12:58+02:00
 	Write error to client in room %s: %v one write tcp [::1]:8080->[::1]:45868: write: broken pipe
 	Read error for client in room one read tcp [::1]:8080->[::1]:37448: read: connection reset by peer
 	Write error to client in room %s: %v one write tcp [::1]:8080->[::1]:37448: write: broken pipe
+
+Logger started, 2025-06-09T14:30:11+02:00
+Logger started, 2025-06-09T14:30:45+02:00	Created and started new room: one for game type: balls
+	Read error for client in room one websocket: close 1006 (abnormal closure): unexpected EOF
+	Write error to client in room %s: %v one write tcp [::1]:8080->[::1]:47412: write: broken pipe
+
+Logger started, 2025-06-09T14:33:37+02:00	Created and started new room: one for game type: balls
+
+Logger started, 2025-06-09T14:37:41+02:00	starting duel game
+	Created and started new room: two for game type: duel
+
+Logger started, 2025-06-09T14:45:26+02:00	starting duel game
+	Created and started new room: two for game type: duel
+
+Logger started, 2025-06-09T14:55:03+02:00	Created and started new room: one for game type: balls
+	Created and started new room: two for game type: balls
+	starting duel game
+	Created and started new room: three for game type: duel
+
+Logger started, 2025-06-09T15:03:51+02:00	starting duel game
+	Created and started new room: three for game type: duel
+
+Logger started, 2025-06-09T15:05:53+02:00	starting duel game
+	Created and started new room: three for game type: duel

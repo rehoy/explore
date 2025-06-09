@@ -2,13 +2,14 @@ package server
 
 import (
 	"github.com/gorilla/websocket"
+	"github.com/rehoy/explore/game"
 	"log"
 	"sync"
 )
 
 type Room struct {
 	ID        string
-	Game      Game
+	Game      game.Game
 	clients   map[*websocket.Conn]bool
 	clientsMu sync.RWMutex
 
@@ -18,7 +19,7 @@ type Room struct {
 	roomsMu    sync.RWMutex
 }
 
-func NewRoom(id string, game Game) *Room {
+func NewRoom(id string, game game.Game) *Room {
 	r := &Room{
 		ID:         id,
 		Game:       game,
@@ -41,6 +42,7 @@ func (r *Room) Run() {
 			r.clients[conn] = true
 			r.clientsMu.Unlock()
 			log.Printf("Client joined room %s. Total clients: %d", r.ID, len(r.clients))
+			r.Game.AddClient(conn)
 		case conn := <-r.unregister:
 			r.clientsMu.Lock()
 			if _, ok := r.clients[conn]; !ok {
@@ -64,7 +66,7 @@ func (r *Room) Run() {
 	}
 }
 
-func (r *Room) getClientCount() int {
+func (r *Room) GetClientCount() int {
 	r.clientsMu.Lock()
 	defer r.clientsMu.Unlock()
 	return len(r.clients)

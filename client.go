@@ -24,10 +24,14 @@ type Event struct {
 
 func main() {
 	room := "one"
+	game := "balls"
 	if len(os.Args) > 1 {
 		room = os.Args[1]
 	}
-	wsURL := fmt.Sprintf("ws://localhost:8080/ws?room=%s", room)
+	if len(os.Args) > 2 {
+		game = os.Args[2]
+	}
+	wsURL := fmt.Sprintf("ws://localhost:8080/ws?room=%s&game=%s", room, game)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
