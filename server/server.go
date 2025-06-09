@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -37,16 +39,15 @@ var upgrader = websocket.Upgrader{
 }
 
 type Server struct {
-	rooms     map[string]*balls.Context
-	Logger    *logger.Logger
-	connRooms map[*websocket.Conn]string // track which room each connection is in
+	rooms   map[string]*Room
+	Logger  *logger.Logger
+	roomsMu sync.RWMutex
 }
 
 func NewServer() *Server {
 	return &Server{
-		rooms:     make(map[string]*balls.Context),
-		Logger:    logger.NewLogger("server.log"),
-		connRooms: make(map[*websocket.Conn]string), // initialize map
+		rooms:  make(map[string]*Room),
+		Logger: logger.NewLogger("server.log"),
 	}
 }
 
@@ -121,6 +122,39 @@ func (s *Server) handleEvent(event Event, context *balls.Context, conn *websocke
 	}
 }
 
+func (s *Server) GetorCreateRoom(roomID, gametype string) (*Room, error) {
+
+	s.roomsMu.Lock()
+	defer s.roomsMu.Unlock()
+
+	room, ok := s.rooms[roomID]
+	if ok {
+		return room, nil
+	}
+
+	var game Game
+
+	switch gametype {
+	case "balls":
+		ctx := balls.MakeContext(800, 600)
+		game = NewBallsGameWrapper(roomID, &ctx)
+	case "colors":
+		s.Logger.Log("Not implemented colors yet")
+		return nil, fmt.Errorf("Not implemeted yet")
+	default:
+		s.Logger.Log("not a recognized gametype", gametype)
+		return nil, fmt.Errorf("Not recognized", gametype)
+	}
+
+	room = NewRoom(roomID, game)
+
+	s.rooms[roomID] = room
+	go room.Run()
+	s.Logger.Log("Created and started new room:", roomID, "for game type:", gametype)
+	return room, nil
+
+}
+
 func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -130,7 +164,7 @@ func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	// Get room from query, default to "default"
-	room := r.URL.Query().Get("room")
+	roomID := r.URL.Query().Get("room")
 	if room == "" {
 		room = "default"
 	}
