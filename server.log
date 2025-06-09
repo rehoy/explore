@@ -454,5 +454,9 @@ Logger started, 2025-06-08T17:12:58+02:00
 
 	added circle
 
-	added circle
 
+
+	Read error for client in room one read tcp [::1]:8080->[::1]:45868: read: connection reset by peer
+	Write error to client in room %s: %v one write tcp [::1]:8080->[::1]:45868: write: broken pipe
+	Read error for client in room one read tcp [::1]:8080->[::1]:37448: read: connection reset by peer
+	Write error to client in room %s: %v one write tcp [::1]:8080->[::1]:37448: write: broken pipe

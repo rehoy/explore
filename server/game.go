@@ -1,6 +1,8 @@
 package server
 
-import 
+import (
+	"github.com/gorilla/websocket"
+)
 
 type Game interface {
 	Update()

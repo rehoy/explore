@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"github.com/gorilla/websocket"
 	"log"
 	"sync"
@@ -40,15 +39,7 @@ func (r *Room) Run() {
 		case conn := <-r.register:
 			r.clientsMu.Lock()
 			r.clients[conn] = true
-			if err := r.Game.AddClient(conn); err != nil {
-				delete(r.clients, conn)
-				var e Event
-				e.Type = "error"
-				payloadBytes, _ := json.Marshal(err)
-				e.Payload = payloadBytes
-				_ = conn.WriteJSON(e)
-				continue
-			}
+			r.clientsMu.Unlock()
 			log.Printf("Client joined room %s. Total clients: %d", r.ID, len(r.clients))
 		case conn := <-r.unregister:
 			r.clientsMu.Lock()

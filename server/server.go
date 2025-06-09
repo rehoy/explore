@@ -165,32 +165,41 @@ func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get room from query, default to "default"
 	roomID := r.URL.Query().Get("room")
-	if room == "" {
-		room = "default"
+	if roomID == "" {
+		roomID = "default"
 	}
 
-	// Track connection to room
-	s.connRooms[conn] = room
-	defer delete(s.connRooms, conn)
-
-	// Get or create context for this room
-	context, ok := s.rooms[room]
-	if !ok {
-		ctx := balls.MakeContext(800, 600)
-		ctx.InitCircles(0) // Initialize with 10 circles
-		context = &ctx
-		s.rooms[room] = context
+	gameType := r.URL.Query().Get("game")
+	if gameType == "" {
+		gameType = "balls"
 	}
+
+	room, err := s.GetorCreateRoom(roomID, gameType)
+	if err != nil {
+		s.Logger.Log("Failed to create room", roomID, gameType)
+		conn.Close()
+		return
+	}
+
+	room.register <- conn
+	defer func() {
+		room.unregister <- conn
+		conn.Close()
+	}()
 
 	go func() {
-		defer func() {}()
+
 		for {
-			var event Event
-			if err := conn.ReadJSON(&event); err != nil {
-				s.Logger.Log("Error reading event", err)
+
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				s.Logger.Log("Read error for client in room", roomID, err)
 				break
 			}
-			s.handleEvent(event, context, conn)
+
+			if err := room.Game.HandleClientMessage(conn, msg); err != nil {
+				s.Logger.Log("Error handling message in room", roomID, err)
+			}
 		}
 	}()
 
@@ -200,40 +209,13 @@ func (s *Server) WsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ticker.C:
-			// We now send the binary state as a specific event type
-			state := context.ExportState()
-			// To send binary, we can't use the JSON envelope.
-			// It's often best to keep state updates separate.
-			err := conn.WriteMessage(websocket.BinaryMessage, state)
-			if err != nil {
-				log.Println("Write error:", err)
-				return // Exit on write error
+			state := room.Game.ExportState()
+			if err := conn.WriteMessage(websocket.BinaryMessage, state); err != nil {
+				s.Logger.Log("Write error to client in room %s: %v", roomID, err)
+				return // Exit if cannot write to client
 			}
-			// Add a channel here to listen for the read goroutine's exit
-			// to properly close the connection.
 		}
+
 	}
 
-}
-
-func (s *Server) StartTestServer() {
-
-	rooms := []struct {
-		name       string
-		numCircles int
-	}{
-		{"one", 10},
-		{"two", 5},
-		{"three", 20},
-	}
-
-	for _, room := range rooms {
-		if _, ok := s.rooms[room.name]; !ok {
-			ctx := balls.MakeContext(800, 600)
-			ctx.InitCircles(room.numCircles)
-			s.rooms[room.name] = &ctx
-			s.startRoomSimulation(room.name, &ctx)
-			s.Logger.Log(0, "Starting simulation for room:", room.name)
-		}
-	}
 }
